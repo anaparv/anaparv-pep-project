@@ -67,7 +67,7 @@ public class MessageDAO {
 
     public Message getMessageById(int messageId) throws SQLException {
         String query = "SELECT * FROM message WHERE message_id = ?";
-        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            try (PreparedStatement stmt = connection.prepareStatement(query)) {
             stmt.setInt(1, messageId);
             try (ResultSet resultSet = stmt.executeQuery()) {
                 if (resultSet.next()) {
