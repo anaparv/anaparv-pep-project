@@ -2,8 +2,6 @@ package DAO;
 import java.sql.*;
 import Model.Account;
 import Util.ConnectionUtil;
-import java.util.ArrayList;
-import java.util.List;
 
 
 public class AccountDAO {
@@ -39,7 +37,19 @@ public class AccountDAO {
             
             try (ResultSet resultSet = stmt.executeQuery()) {
                 resultSet.next();
-                return resultSet.getInt(1) > 0; // If count > 0, username exists
+                return resultSet.getInt(1) > 0;
+            }
+        }
+    }
+
+    public boolean doesAccountIdExist(int accountId) throws SQLException {
+        String query = "SELECT COUNT(*) FROM account WHERE account_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            stmt.setInt(1, accountId);
+            
+            try (ResultSet resultSet = stmt.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1) > 0;
             }
         }
     }

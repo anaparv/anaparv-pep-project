@@ -9,23 +9,19 @@ public class MessageService {
     private MessageDAO messageDAO = new MessageDAO();
 
     public Message createMessage(Message message) throws SQLException {
-        // Validate message fields at the service level (you can also keep this in the DAO if necessary)
+        // Validate message fields
         if (message.getMessage_text() == null || message.getMessage_text().trim().isEmpty()) {
             throw new IllegalArgumentException("Message text cannot be blank.");
         }
         if (message.getMessage_text().length() > 255) {
             throw new IllegalArgumentException("Message text cannot exceed 255 characters.");
         }
-        
-        // Validate user existence (could be optional if already done in DAO)
+
+        // Validate user existence
         if (!messageDAO.doesUserExist(message.getPosted_by())) {
             throw new IllegalArgumentException("User does not exist.");
         }
 
-        // Set the current time as epoch time for the message
-        message.setTime_posted_epoch(System.currentTimeMillis() / 1000L);
-
-        // Call DAO to persist the message to the database
         return messageDAO.createMessage(message);
     }
 
@@ -46,6 +42,13 @@ public class MessageService {
     }
 
     public Message updateMessage(Message message) throws SQLException {
-        return messageDAO.updateMessageText(message.getMessage_id(), message.getMessage_text());
+        try {
+            return messageDAO.updateMessageText(message.getMessage_id(), message.getMessage_text());
+        } catch (SQLException e) {
+            if (e.getMessage().contains("does not exist")) {
+                throw new IllegalArgumentException("Message not found.");
+            }
+            throw e;
+        }
     }
 }

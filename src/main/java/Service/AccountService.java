@@ -7,7 +7,7 @@ public class AccountService {
     private AccountDAO accountDAO;
 
     public AccountService(AccountDAO accountDAO) {
-        accountDAO = new AccountDAO();
+        this.accountDAO = accountDAO;
     }
 
     public Account registerAccount(Account account) throws SQLException {
@@ -34,22 +34,24 @@ public class AccountService {
         return accountDAO.doesUsernameExist(username);
     }
 
-    public Account login(String username, String password) throws SQLException {
-        if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be blank.");
-        }
-        if (password == null || password.length() < 4) {
-            throw new IllegalArgumentException("Password must be at least 4 characters long.");
-        }
-
-        // Check login using the AccountDAO
-        Account account = accountDAO.login(username, password);
-        
-        if (account == null) {
-            // Throw an exception or handle login failure as needed
-            throw new IllegalArgumentException("Invalid username or password.");
-        }
-
-        return account;
+    public boolean doesUserExist(int accountId) throws SQLException {
+        return accountDAO.doesAccountIdExist(accountId);
     }
+
+    public Account login(String username, String password) throws SQLException {
+        // Check for username and password presence
+    if (username == null || username.trim().isEmpty() || password == null || password.length() < 4) {
+        throw new IllegalArgumentException("Invalid username or password.");
+    }
+
+    // Check login using the AccountDAO
+    Account account = accountDAO.login(username, password);
+    
+    if (account == null) {
+        // If the account is null, it means login failed
+        throw new IllegalArgumentException("Invalid username or password.");
+    }
+
+    return account;
+}
 }

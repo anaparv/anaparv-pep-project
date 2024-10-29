@@ -32,7 +32,7 @@ public class MessageDAO {
             // Retrieve the generated message_id
             try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
-                    message.setMessage_id(generatedKeys.getInt(1)); // Set the generated message_id
+                    message.setMessage_id(generatedKeys.getInt(1));
                 } else {
                     throw new SQLException("Creating message failed, no ID obtained.");
                 }
@@ -41,12 +41,7 @@ public class MessageDAO {
         return message;
     }
 
-    /**
-     * Validates the message fields.
-     *
-     * @param message the message object to validate
-     * @throws IllegalArgumentException if the message is invalid
-     */
+    // Validates the message fields.
     private void validateMessage(Message message) {
         if (message.getMessage_text() == null || message.getMessage_text().trim().isEmpty()) {
             throw new IllegalArgumentException("Message text cannot be blank.");
@@ -56,13 +51,7 @@ public class MessageDAO {
         }
     }
 
-    /**
-     * Checks if a user exists in the account table.
-     *
-     * @param userId the ID of the user to check
-     * @return true if the user exists, false otherwise
-     * @throws SQLException if a database error occurs
-     */
+    // Checks if a user exists in the account table.
     public boolean doesUserExist(int userId) throws SQLException {
         String query = "SELECT COUNT(*) FROM account WHERE account_id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(query)) {
@@ -144,47 +133,43 @@ public class MessageDAO {
 
     public Message updateMessageText(int messageId, String newText) throws SQLException {
         // Ensure the new text is not blank and not over 255 characters
-        if (newText == null || newText.trim().isEmpty() || newText.length() > 255) {
-            throw new IllegalArgumentException("Message text must be non-blank and under 255 characters.");
-        }
+    if (newText == null || newText.trim().isEmpty() || newText.length() > 255) {
+        throw new IllegalArgumentException("Message text must be non-blank and under 255 characters.");
+    }
 
-        // Check if the message exists before attempting the update
-        String selectQuery = "SELECT * FROM message WHERE message_id = ?";
-        Message message = null;
+    // Initialize variables to hold the existing message details
+    int postedBy = 0;
+    long timePostedEpoch = 0;
 
-        try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
-            selectStmt.setInt(1, messageId);
-            try (ResultSet resultSet = selectStmt.executeQuery()) {
-                if (resultSet.next()) {
-                    // Message exists, retrieve the current message data
-                    message = new Message(
-                            resultSet.getInt("message_id"),
-                            resultSet.getInt("posted_by"),
-                            resultSet.getString("message_text"),
-                            resultSet.getLong("time_posted_epoch")
-                    );
-                } else {
-                    throw new SQLException("Message with the provided ID does not exist.");
-                }
+    // Check if the message exists before attempting the update
+    String selectQuery = "SELECT * FROM message WHERE message_id = ?";
+    try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
+        selectStmt.setInt(1, messageId);
+        try (ResultSet resultSet = selectStmt.executeQuery()) {
+            if (!resultSet.next()) {
+                // Message does not exist, throw an exception
+                throw new SQLException("Message with the provided ID does not exist.");
             }
+            // Retrieve existing details from the ResultSet
+            postedBy = resultSet.getInt("posted_by");
+            timePostedEpoch = resultSet.getLong("time_posted_epoch");
         }
+    }
 
-        // Proceed with the update if the message exists
-        String updateQuery = "UPDATE message SET message_text = ? WHERE message_id = ?";
-        try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
-            updateStmt.setString(1, newText);
-            updateStmt.setInt(2, messageId);
+    // Proceed with the update if the message exists
+    String updateQuery = "UPDATE message SET message_text = ? WHERE message_id = ?";
+    try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
+        updateStmt.setString(1, newText);
+        updateStmt.setInt(2, messageId);
 
-            int rowsUpdated = updateStmt.executeUpdate();
-            if (rowsUpdated > 0) {
-                // Update the message object with the new text
-                message.setMessage_text(newText);
-            } else {
-                throw new SQLException("Failed to update the message.");
-            }
+        int rowsUpdated = updateStmt.executeUpdate();
+        if (rowsUpdated > 0) {
+            // Return the updated message using the existing posted_by and time_posted_epoch
+            return new Message(messageId, postedBy, newText, timePostedEpoch);
+        } else {
+            throw new SQLException("Failed to update the message.");
         }
-
-        return message; // Return the updated message object
+    }
     }
 
     public boolean deleteMessageById(int messageId) throws SQLException {

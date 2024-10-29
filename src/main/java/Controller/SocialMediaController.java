@@ -8,7 +8,6 @@ import Service.MessageService;
 import Model.Account;
 import Model.Message;
 import java.util.List;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.*;
 
@@ -30,7 +29,8 @@ public class SocialMediaController {
      */
     public Javalin startAPI() {
         Javalin app = Javalin.create();
-        //    app.get("example-endpoint", this::exampleHandler);
+        // app.get("example-endpoint", this::exampleHandler);
+
         // User Registration
         app.post("/register", this::registerUser);
 
@@ -67,106 +67,83 @@ public class SocialMediaController {
     }
 
     private void registerUser(Context ctx) {
-        // Check if the request body is empty
-    if (ctx.body().isEmpty()) {
-        ctx.status(200).result("No account information provided."); // or any appropriate response
-        return;
-    }
-
-    try {
-        // Deserialize the request body into an Account object
-        Account account = objectMapper.readValue(ctx.body(), Account.class);
-
-        // Check if the username is blank before checking existence
-        if (account.getUsername() == null || account.getUsername().trim().isEmpty()) {
-            ctx.status(400).result("Username cannot be blank.");
-            return;
+        try {
+            Account account = objectMapper.readValue(ctx.body(), Account.class);
+    
+            // Create the account
+            Account createdAccount = accountService.registerAccount(account);
+            ctx.status(200).json(createdAccount); 
+    
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).result(""); 
+        } catch (Exception e) {
+            ctx.status(500).result("Internal server error.");
         }
-
-        // Check if username already exists
-        if (accountService.doesUsernameExist(account.getUsername())) {
-            ctx.status(400).result("Username already exists.");
-            return;
-        }
-
-        // Validate password length
-        if (account.getPassword() == null || account.getPassword().length() < 4) {
-            ctx.status(400).result("Password must be at least 4 characters long.");
-            return;
-        }
-
-        // Create the account
-        Account createdAccount = accountService.registerAccount(account);
-        ctx.status(200).json(createdAccount); // Return created account with status 200
-
-    } catch (IllegalArgumentException e) {
-        // Handle validation exceptions separately
-        ctx.status(400).result(e.getMessage());
-    } catch (JsonProcessingException e) {
-        // Handle JSON parsing exceptions
-        ctx.status(400).result("Invalid JSON format.");
-    } catch (SQLException e) {
-        // Handle SQL exceptions related to account registration
-        ctx.status(500).result("Failed to register account due to database error.");
-    } catch (Exception e) {
-        // Handle any other unexpected exceptions
-        ctx.status(500).result("Internal server error.");
-    }
     }
 
     private void login(Context ctx) {
-        // Parse the JSON body to Account object
-        Account loginAccount;
         try {
-            loginAccount = objectMapper.readValue(ctx.body(), Account.class);
-        } catch (Exception e) {
-            ctx.status(400);
-            ctx.result("Invalid JSON format.");
-            return;
-        }
-
-        try {
-            // Call the login method from the account service
-            Account account = accountService.login(loginAccount.getUsername(), loginAccount.getPassword());
-
-            // Set the response status and body
-            ctx.status(200);
-            ctx.json(account); // Send the account back as JSON
+            Account account = objectMapper.readValue(ctx.body(), Account.class);
+    
+            // Validate username and password
+            if (account.getUsername() == null || account.getUsername().trim().isEmpty()) {
+                ctx.status(401).result("");
+                return;
+            }
+            if (account.getPassword() == null || account.getPassword().length() < 4) {
+                ctx.status(401).result("");
+                return;
+            }
+    
+            // Attempt to log in
+            Account loggedInAccount = accountService.login(account.getUsername(), account.getPassword());
+            ctx.json(loggedInAccount); 
+    
         } catch (IllegalArgumentException e) {
-            // If login fails, respond with 401 Unauthorized
-            ctx.status(401);
-            ctx.result(e.getMessage());
+            ctx.status(401).result("");
         } catch (SQLException e) {
-            // Handle any SQL exceptions
-            ctx.status(500);
-            ctx.result("Internal Server Error: " + e.getMessage());
+            ctx.status(500).result("Database error.");
+        } catch (Exception e) {
+            ctx.status(500).result("Internal server error.");
         }
     }
 
     private void createMessage(Context ctx) {
-        // Parse the JSON body to Message object
         Message message;
         try {
             message = objectMapper.readValue(ctx.body(), Message.class);
         } catch (Exception e) {
             ctx.status(400);
-            ctx.result("Invalid JSON format.");
+            ctx.result(""); 
             return;
         }
-
+    
+        if (message.getMessage_text() == null || message.getMessage_text().trim().isEmpty()) {
+            ctx.status(400);
+            ctx.result("");
+            return;
+        }
+        if (message.getMessage_text().length() > 255) {
+            ctx.status(400);
+            ctx.result("");
+            return;
+        }
+    
         try {
-            // Call the createMessage method from the message service
+            if (!accountService.doesUserExist(message.getPosted_by())) {
+                ctx.status(400);
+                ctx.result("");
+                return;
+            }
+    
             Message createdMessage = messageService.createMessage(message);
-
-            // Set the response status and body
+    
             ctx.status(200);
-            ctx.json(createdMessage); // Send the created message back as JSON
+            ctx.json(createdMessage);
         } catch (IllegalArgumentException e) {
-            // If validation fails, respond with 400 Bad Request
             ctx.status(400);
             ctx.result(e.getMessage());
         } catch (SQLException e) {
-            // Handle any SQL exceptions
             ctx.status(500);
             ctx.result("Internal Server Error: " + e.getMessage());
         }
@@ -178,10 +155,10 @@ public class SocialMediaController {
             List<Message> messages = messageService.getAllMessages();
 
             // Set the response body to the list of messages
-            ctx.json(messages); // Automatically returns an empty list if there are no messages
+            ctx.json(messages); 
         } catch (SQLException e) {
             // Handle any SQL exceptions
-            ctx.status(500); // Internal Server Error
+            ctx.status(500);
             ctx.result("Internal Server Error: " + e.getMessage());
         }
     }
@@ -190,23 +167,23 @@ public class SocialMediaController {
         int messageId;
 
         try {
-            messageId = Integer.parseInt(ctx.pathParam("message_id")); // Parse the message ID
+            messageId = Integer.parseInt(ctx.pathParam("message_id"));
     
-            Message message = messageService.getMessageById(messageId); // Get message by ID
+            Message message = messageService.getMessageById(messageId);
     
             if (message == null) {
-                ctx.status(200); // Change this to 200 if the message is not found
-                ctx.result(""); // Return an empty body
+                ctx.status(200);
+                ctx.result("");
                 return;
             }
     
-            ctx.json(message); // Return the message as JSON if found
+            ctx.json(message);
     
         } catch (NumberFormatException e) {
-            ctx.status(400); // Bad Request for invalid message ID format
+            ctx.status(400); 
             ctx.result("Invalid message ID format.");
         } catch (SQLException e) {
-            ctx.status(500); // Internal Server Error for other exceptions
+            ctx.status(500); 
             ctx.result("Database error.");
         }
     }
@@ -223,69 +200,64 @@ public class SocialMediaController {
             boolean deleted = messageService.deleteMessageById(messageId);
             
             if (deleted) {
-                ctx.json(message); // Return the deleted message
+                ctx.json(message); 
             } else {
-                ctx.status(200); // Return 200 OK with empty body
+                ctx.status(200);
             }
         } catch (NumberFormatException e) {
             // Handle invalid message ID format
-            ctx.status(400); // Bad Request
+            ctx.status(400); 
             ctx.result("Invalid message ID format.");
         } catch (SQLException e) {
             // Handle any SQL exceptions
-            ctx.status(500); // Internal Server Error
+            ctx.status(500); 
             ctx.result("Internal Server Error: " + e.getMessage());
         }
     }
 
     private void updateMessageById(Context ctx) {
         try {
-            // Retrieve the message ID from the path parameters
             int messageId = Integer.parseInt(ctx.pathParam("message_id"));
-            
-            // Parse the request body to get the new message text
-            Message updateMessage = ctx.bodyAsClass(Message.class); // Assuming Message has a setter for message_text
-            
+            Message updateMessage = ctx.bodyAsClass(Message.class);
+    
             // Validate the new message text
             if (updateMessage.getMessage_text() == null || updateMessage.getMessage_text().trim().isEmpty()) {
-                ctx.status(400); // Bad Request
-                ctx.result("Message text cannot be blank.");
+                ctx.status(400); 
+                ctx.result(""); 
                 return;
             }
             if (updateMessage.getMessage_text().length() > 255) {
-                ctx.status(400); // Bad Request
-                ctx.result("Message text cannot exceed 255 characters.");
+                ctx.status(400); 
+                ctx.result(""); 
                 return;
             }
-
-            // Fetch the existing message to ensure it exists
+    
+            // Check if the message exists
             Message existingMessage = messageService.getMessageById(messageId);
             if (existingMessage == null) {
-                ctx.status(400); // Bad Request if the message does not exist
-                ctx.result("Message ID not found.");
+                ctx.status(400); 
+                ctx.result(""); 
                 return;
             }
-
-            // Update the message text
+    
+            // Update the message
             existingMessage.setMessage_text(updateMessage.getMessage_text());
-
-            // Call the DAO to persist the updated message
             Message updatedMessage = messageService.updateMessage(existingMessage);
-
+    
             // Return the updated message as JSON
             ctx.json(updatedMessage);
         } catch (NumberFormatException e) {
-            // Handle invalid message ID format
-            ctx.status(400); // Bad Request
-            ctx.result("Invalid message ID format.");
+            ctx.status(400); 
+            ctx.result(""); 
         } catch (SQLException e) {
-            // Handle any SQL exceptions
-            ctx.status(500); // Internal Server Error
+            ctx.status(500); 
             ctx.result("Internal Server Error: " + e.getMessage());
         } catch (IllegalArgumentException e) {
-            // Handle invalid message content
-            ctx.status(400); // Bad Request
-            ctx.result(e.getMessage());
+            ctx.status(400); 
+            ctx.result(""); 
+        } catch (Exception e) {
+            ctx.status(500); 
+            ctx.result("An unexpected error occurred: " + e.getMessage());
         }
     }
 
@@ -298,12 +270,12 @@ public class SocialMediaController {
             List<Message> messages = messageService.getMessagesByUserId(accountId);
     
             // Set the response status and return the messages as JSON
-            ctx.status(200).json(messages); // 200 is the default status
+            ctx.status(200).json(messages);
         } catch (NumberFormatException e) {
-            ctx.status(400); // Bad Request
+            ctx.status(400); 
             ctx.result("Invalid account ID format.");
         } catch (SQLException e) {
-            ctx.status(500); // Internal Server Error
+            ctx.status(500); 
             ctx.result("Internal Server Error: " + e.getMessage());
         }
     }
