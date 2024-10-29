@@ -7,90 +7,61 @@ import java.util.List;
 
 
 public class AccountDAO {
-    // Create a new account
-    public void createAccount(String username, String password) throws SQLException {
+    Connection connection = ConnectionUtil.getConnection();
+
+    public Account createAccount(Account account) throws SQLException {
         String query = "INSERT INTO account (username, password) VALUES (?, ?)";
-        try (Connection connection = ConnectionUtil.getConnection();
-             PreparedStatement stmt = connection.prepareStatement(query)) {
+        try (PreparedStatement stmt = connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, account.getUsername());
+            stmt.setString(2, account.getPassword());
+            
+            int affectedRows = stmt.executeUpdate();
+            
+            if (affectedRows == 0) {
+                throw new SQLException("Creating account failed, no rows affected.");
+            }
+
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    account.setAccount_id(generatedKeys.getInt(1));
+                } else {
+                    throw new SQLException("Creating account failed, no ID obtained.");
+                }
+            }
+        }
+        return account;
+    }
+
+    public boolean doesUsernameExist(String username) throws SQLException {
+        String query = "SELECT COUNT(*) FROM account WHERE username = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            stmt.setString(1, username);
+            
+            try (ResultSet resultSet = stmt.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1) > 0; // If count > 0, username exists
+            }
+        }
+    }
+
+    public Account login(String username, String password) throws SQLException {
+        String query = "SELECT * FROM account WHERE username = ? AND password = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
             stmt.setString(1, username);
             stmt.setString(2, password);
-            stmt.executeUpdate();
-        }
-    }
 
-    // Get account by id
-    public Account getAccountById(int accountId) throws SQLException {
-        String query = "SELECT * FROM account WHERE account_id = ?";
-        try (Connection connection = ConnectionUtil.getConnection();
-             PreparedStatement stmt = connection.prepareStatement(query)) {
-            stmt.setInt(1, accountId);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return new Account(rs.getInt("account_id"), rs.getString("username"), rs.getString("password"));
+            try (ResultSet resultSet = stmt.executeQuery()) {
+                if (resultSet.next()) {
+                    // Create an Account object and set its properties
+                    Account account = new Account();
+                    account.setAccount_id(resultSet.getInt("account_id"));
+                    account.setUsername(resultSet.getString("username"));
+                    account.setPassword(resultSet.getString("password"));
+                    return account; // Successful login
+                } else {
+                    return null; // Login failed (wrong username/password)
+                }
             }
         }
-        return null; // Account not found
-    }
-
-    // Get all accounts
-    public List<Account> getAllAccounts() throws SQLException {
-        List<Account> accounts = new ArrayList<>();
-        String query = "SELECT * FROM account";
-        try (Connection connection = ConnectionUtil.getConnection();
-             PreparedStatement stmt = connection.prepareStatement(query)) {
-            ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                accounts.add(new Account(rs.getInt("account_id"), rs.getString("username"), rs.getString("password")));
-            }
-        }
-        return accounts;
-    }
-
-    // Update account
-    public void updateAccount(int accountId, String newUsername, String newPassword) throws SQLException {
-        String query = "UPDATE account SET username = ?, password = ? WHERE account_id = ?";
-        try (Connection connection = ConnectionUtil.getConnection();
-             PreparedStatement stmt = connection.prepareStatement(query)) {
-            stmt.setString(1, newUsername);
-            stmt.setString(2, newPassword);
-            stmt.setInt(3, accountId);
-            stmt.executeUpdate();
-        }
-    }
-
-    // Delete account
-    public void deleteAccount(int accountId) throws SQLException {
-        String query = "DELETE FROM account WHERE account_id = ?";
-        try (Connection connection = ConnectionUtil.getConnection();
-             PreparedStatement stmt = connection.prepareStatement(query)) {
-            stmt.setInt(1, accountId);
-            stmt.executeUpdate();
-        }
-    }
-
-    // Retrieve an account by username
-    public Account getAccountByUsername(String username) {
-        Account account = null;
-        String sql = "SELECT * FROM account WHERE username = ?";
-
-        try (Connection conn = ConnectionUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, username);
-            ResultSet rs = stmt.executeQuery();
-
-            if (rs.next()) {
-                int accountId = rs.getInt("account_id");
-                String retrievedUsername = rs.getString("username");
-                String password = rs.getString("password");
-
-                account = new Account(accountId, retrievedUsername, password);
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return account;
     }
 }
